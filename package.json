@@ -1,0 +1,19 @@
+{
+  "name": "eth_event_observer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HassanAmed/eth_event_observer.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HassanAmed/eth_event_observer/issues"
+  },
+  "homepage": "https://github.com/HassanAmed/eth_event_observer#readme"
+}
