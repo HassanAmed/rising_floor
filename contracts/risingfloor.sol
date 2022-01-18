@@ -1243,25 +1243,18 @@ pragma solidity >=0.7.0 <0.9.0;
 contract RisingFloor is ERC721Enumerable, Ownable {
   using Strings for uint256;
 
+  string standardURI;
   string baseURI;
   string public baseExtension = ".json";
-  uint256 public cost = 0.08 ether;
-  uint256 public maxSupply = 10000;
-  uint256 public maxMintAmount = 5;
+  uint256 public cost = 0.5 ether;
+  uint256 public maxSupply = 10000000;
+  uint256 public maxMintAmount = 100;
   bool public paused = true;
-  bool public revealed = false;
-  string public notRevealedUri;
-  mapping(address => bool) public blacklisted;
-  mapping(uint => bool) public freezer;
 
   constructor(
     string memory _name,
-    string memory _symbol,
-    string memory _initBaseURI,
-    string memory _initNotRevealedUri
+    string memory _symbol
   ) ERC721(_name, _symbol) {
-    setBaseURI(_initBaseURI);
-    setNotRevealedURI(_initNotRevealedUri);
   }
 
   // internal
@@ -1275,8 +1268,8 @@ contract RisingFloor is ERC721Enumerable, Ownable {
     require(!paused);
     require(_mintAmount > 0);
     require(_mintAmount <= maxMintAmount);
-    require(supply + _mintAmount <= 9950);
-    require(msg.value >= cost * _mintAmount);
+    require(supply + _mintAmount <= maxSupply);
+    require(msg.value >= cost * _mintAmount,"sent eth < cost");
 
     for (uint256 i = 1; i <= _mintAmount; i++) {
       _safeMint(msg.sender, supply + i);
@@ -1287,8 +1280,22 @@ contract RisingFloor is ERC721Enumerable, Ownable {
     uint256 supply = totalSupply();
     require(!paused);
     require(_mintAmount > 0);
-    require(_mintAmount <= maxMintAmount);
-    require(supply + _mintAmount <= maxSupply);
+    require(_mintAmount <= maxMintAmount,"can't mint more than maxMintAmount");
+    require(supply + _mintAmount <= maxSupply,"exceeding maxSupply");
+
+
+    for (uint256 i = 1; i <= _mintAmount; i++) {
+      _safeMint(msg.sender, supply + i);
+    }
+  }
+
+  function airgrabMint(uint256 _mintAmount) public {
+    uint256 supply = totalSupply();
+    require(!paused);
+    require(_mintAmount > 0);
+    require(_mintAmount <= maxMintAmount,"can't mint more than maxMintAmount");
+    require(supply + _mintAmount <= 15000,"15k giveaway tokens already minted");
+    require(balanceOf(msg.sender) + _mintAmount <= 100, "max giveaway minted for this address");
 
     for (uint256 i = 1; i <= _mintAmount; i++) {
       _safeMint(msg.sender, supply + i);
@@ -1319,80 +1326,39 @@ contract RisingFloor is ERC721Enumerable, Ownable {
       _exists(tokenId),
       "ERC721Metadata: URI query for nonexistent token"
     );
-    
-    if(revealed == false) {
-        return notRevealedUri;
-    }
 
     string memory currentBaseURI = _baseURI();
     return bytes(currentBaseURI).length > 0
         ? string(abi.encodePacked(currentBaseURI, tokenId.toString(), baseExtension))
-        : "";
+        : standardURI;
   }
-  // Blacklisted Account check before transfers
 
-    /**
-     * @dev See {IERC721-transferFrom}.
-     */
-    function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) public virtual override {
-        //solhint-disable-next-line max-line-length
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
-        require(!blacklisted[from], "RisingFloor: token sender is blacklisted");
-        require(!blacklisted[to], "RisingFloor: token receiver is blacklisted");
-        _transfer(from, to, tokenId);
+ // standard burn fn for users to burn their token
+  function burn(uint256 tokenId) public onlyOwner {
+    //solhint-disable-next-line max-line-length
+    require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721Burnable: caller is not owner nor approved");
+    _burn(tokenId);
     }
 
-    /**
-     * @dev See {IERC721-safeTransferFrom}.
-     */
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) public virtual override {
-        require(!blacklisted[from], "RisingFloor: token sender is blacklisted");
-        require(!blacklisted[to], "RisingFloor: token receiver is blacklisted");
-        safeTransferFrom(from, to, tokenId, "");
-    }
-
-    /**
-     * @dev See {IERC721-safeTransferFrom}.
-     */
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes memory _data
-    ) public virtual override {
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
-        require(!blacklisted[from], "RisingFloor: token sender is blacklisted");
-        require(!blacklisted[to], "RisingFloor: token receiver is blacklisted");
-        _safeTransfer(from, to, tokenId, _data);
-    }
-
-  //only owner
-  function reveal() public onlyOwner {
-      revealed = true;
-  }
-  
+  //only owner  
   function setCost(uint256 _newCost) public onlyOwner {
     cost = _newCost;
   }
+ // Burn reserved for owner
+  function burnToken(uint256 tokenId) public onlyOwner {
+    _burn(tokenId);
+    }
 
   function setmaxMintAmount(uint256 _newmaxMintAmount) public onlyOwner {
     maxMintAmount = _newmaxMintAmount;
   }
   
-  function setNotRevealedURI(string memory _notRevealedURI) public onlyOwner {
-    notRevealedUri = _notRevealedURI;
-  }
-
   function setBaseURI(string memory _newBaseURI) public onlyOwner {
     baseURI = _newBaseURI;
+  }
+
+  function setStandardURI(string memory _newStandardURI) public onlyOwner {
+    standardURI = _newStandardURI;
   }
 
   function setBaseExtension(string memory _newBaseExtension) public onlyOwner {
@@ -1402,19 +1368,7 @@ contract RisingFloor is ERC721Enumerable, Ownable {
   function pause(bool _state) public onlyOwner {
     paused = _state;
   }
-    /**
-     * @dev Owner can whitelist address which can mint without paying cost.
-     */
-  function blacklistUser(address _user) public onlyOwner {
-    blacklisted[_user] = true;
-  }
-    /**
-     * @dev Owner can remove address from whitelist.
-     */
-  function removeBlacklistUser(address _user) public onlyOwner {
-    blacklisted[_user] = false;
-  }
-  
+ 
   function withdraw() public payable onlyOwner {
     (bool success, ) = payable(msg.sender).call{
     value: address(this).balance
