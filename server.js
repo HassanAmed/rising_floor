@@ -1,5 +1,8 @@
 import Web3 from "web3";
-import { readFileSync, appendFileSync } from "fs";
+import {
+  readFileSync,
+  createWriteStream,
+} from "fs";
 import { resolve } from "path";
 import { transferAbi } from "./eventsAbi.js";
 import sc from "node-cron";
@@ -11,9 +14,12 @@ const web3 = new Web3(
   `wss://polygon-${process.env.POLY_NETWORK_NAME}.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
 );
 
-schedule("* * * * *", () => { //0 0 * * * midnight
-  fPrice = fPrice + (incPercent / 100) * fPrice;
-  console.log("updated floor", fPrice);
+schedule("* * * * *", () => {
+  fPrice = parseFloat((fPrice + (incPercent / 100) * fPrice).toFixed(2));
+  let logStream = createWriteStream("floorPriceLogs.txt", { flags: "a" });
+  let date = new Date();
+  logStream.write(`Current Floor price is ${fPrice} on ${date.toISOString()} \n`);
+  logStream.end();
 });
 
 const rfContractABI = JSON.parse(
@@ -85,9 +91,9 @@ async function decodeLogs(txHash, tokenId) {
 
 export async function handleBelowFloorSale(tokenId) {
   try {
-    appendFileSync("belowFloor.txt", contents, {
-      flag: "ax",
-    });
+    let logStream = createWriteStream("belowFloorLogs.txt", { flags: "a" });
+    logStream.write(`Token ${tokenId} sold below floor price ${fPrice} \n`);
+    logStream.end();
   } catch (e) {
     console.log(
       `ERROR whilst saving below floor sale of token ${tokenId} to file:${e}`
@@ -95,15 +101,19 @@ export async function handleBelowFloorSale(tokenId) {
   }
 
   let result = await burnToken(parseInt(tokenId));
-  if (result.status == true && result.transactionHash) {
-    try {
-      appendFileSync("burned.txt", contents, {
-        flag: "ax",
-      });
-    } catch (e) {
-      console.log(
-        `ERROR whilst saving burnt token ${tokenId} to file:${e}`
+  try {
+    if (result.status == true && result.txHash) {
+      let logStream = createWriteStream("burnLogs.txt", { flags: "a" });
+      logStream.write(
+        `Token ${tokenId} burned with txHash ${result.txHash} \n`
       );
+      logStream.end();
+    } else {
+      throw `Failed burn tx`;
     }
+  } catch (e) {
+    console.log(`ERROR whilst saving burnt token ${tokenId} to file:${e}`);
   }
+
+  return;
 }
